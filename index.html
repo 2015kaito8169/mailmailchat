@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>mailmailchat</title>
+    <style>
+        :root { --primary: #4C97FF; --accent: #2b7fff; --chat-green: #2ecc71; --bg: #f4f7f9; --white: #fff; --text: #2c3e50; --gray: #d1d9e0; --danger: #ff4c4c; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        #mm-auth-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); z-index: 10000; display: flex; justify-content: center; align-items: center; }
+        .auth-card { background: rgba(255, 255, 255, 0.98); padding: 40px; border-radius: 32px; box-shadow: 0 30px 60px rgba(0,0,0,0.2); width: 300px; text-align: center; }
+        .logo-icon { width: 60px; height: 60px; background: var(--primary); border-radius: 15px; display: flex; justify-content: center; align-items: center; margin: 0 auto 15px; color: white; font-size: 32px; font-weight: 900; }
+        input { width: 100%; padding: 14px; margin: 8px 0; border: 2px solid #f0f3f6; border-radius: 12px; outline: none; box-sizing: border-box; }
+        .login-btn { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        #main-app { display: none; flex-direction: column; height: 100vh; }
+        header { background: white; padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        #view-content { flex: 1; overflow-y: auto; background: #fafafa; padding-bottom: 130px; }
+        .nav-bar { background: white; border-top: 1px solid var(--gray); display: flex; justify-content: space-around; padding: 10px 0 25px; position: fixed; bottom: 0; width: 100%; }
+        .nav-item { text-align: center; font-size: 10px; color: #99aebe; cursor: pointer; flex: 1; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        .nav-icon { font-size: 22px; display: block; }
+        .bubble { max-width: 75%; padding: 10px; font-size: 14px; border-radius: 12px; margin: 5px; word-wrap: break-word; }
+        .bubble.me { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
+        .bubble.other { align-self: flex-start; background: white; border-bottom-left-radius: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .input-area { background: white; padding: 10px; display: flex; gap: 8px; border-top: 1px solid #eee; position: fixed; bottom: 65px; width: 100%; box-sizing: border-box; }
+        .card { background: white; margin: 10px; padding: 15px; border-radius: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .item { display: flex; align-items: center; padding: 15px; background: white; border-bottom: 1px solid #eee; cursor: pointer; }
+        .chat-header { background: #fff; border-bottom: 1px solid #eee; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+        .invite-btn { background: var(--chat-green); color: white; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="mm-auth-overlay">
+        <div class="auth-card">
+            <div class="logo-icon">m</div>
+            <h1>mailmail<span style="color:var(--chat-green)">chat</span></h1>
+            <p id="mm-status" style="font-size:12px; color:#999;">ログインしてください</p>
+            <input type="text" id="mm-id" placeholder="ID">
+            <input type="password" id="mm-pw" placeholder="パスワード">
+            <button class="login-btn" onclick="handleAuth()">実行</button>
+            <p style="font-size:11px; color:#999; margin-top:15px; cursor:pointer;" onclick="isReg=!isReg; document.getElementById('mm-status').innerText=isReg?'新規登録':'ログイン'">新規登録/切替</p>
+        </div>
+    </div>
+
+    <div id="main-app">
+        <header><div style="color:var(--primary); font-weight:900;">mailmail分家</div><span id="u-disp" style="font-size:12px; font-weight:bold;"></span></header>
+        <div id="view-content"></div>
+        <div id="chat-bar" style="display:none;" class="input-area">
+            <input id="m-in" placeholder="メッセージ..." onkeypress="if(event.key==='Enter')send()">
+            <button onclick="send()" style="background:var(--primary); color:white; border:none; border-radius:8px; padding:8px 12px;">送る</button>
+        </div>
+        <nav class="nav-bar">
+            <div class="nav-item" onclick="tab('talk')"><span class="nav-icon">💬</span>トーク</div>
+            <div class="nav-item" onclick="tab('add')"><span class="nav-icon">➕</span>交換</div>
+            <div class="nav-item" onclick="tab('home')"><span class="nav-icon">🏠</span>ホーム<span id="b-home" style="display:none; color:red;">●</span></div>
+            <div class="nav-item" onclick="tab('group')"><span class="nav-icon">👥</span>G作成</div>
+            <div class="nav-item" onclick="tab('set')"><span class="nav-icon">⚙️</span>設定</div>
+        </nav>
+    </div>
+
+    <script>
+        const API = 'https://floral-limit-5170.kaito20158169.workers.dev';
+        let curId = "", curPw = "", partner = "", isGroup = false, isReg = false;
+        let syncTimer = null;
+
+        async function callAPI(action, extra = {}) {
+            const q = new URLSearchParams({ action, id: curId, pw: curPw, ...extra }).toString();
+            try { const r = await fetch(`${API}?${q}`); return await r.json(); } catch(e) { return {error:"FETCH_ERR"}; }
+        }
+
+        async function handleAuth() {
+            const id = document.getElementById('mm-id').value.trim();
+            const pw = document.getElementById('mm-pw').value.trim();
+            if(!id || !pw) return;
+            const action = isReg ? 'register' : 'login';
+            const res = await fetch(`${API}?action=${action}&id=${id}&pw=${pw}`).then(r => r.json());
+            if(res.success) {
+                curId = id; curPw = pw;
+                document.getElementById('mm-auth-overlay').style.display = 'none';
+                document.getElementById('main-app').style.display = 'flex';
+                document.getElementById('u-disp').innerText = id;
+                tab('home'); startSync();
+            } else { alert(res.error || "失敗しました"); }
+        }
+
+        function startSync() {
+            if(syncTimer) clearInterval(syncTimer);
+            syncTimer = setInterval(async () => {
+                if(partner) loadMsgs();
+                const data = await callAPI('sync');
+                document.getElementById('b-home').style.display = (data.req?.length) ? 'inline' : 'none';
+            }, 3000);
+        }
+
+        async function tab(t) {
+            partner = ""; isGroup = false;
+            document.getElementById('chat-bar').style.display = "none";
+            const c = document.getElementById('view-content');
+            document.querySelectorAll('.nav-item').forEach((el, i) => el.classList.toggle('active', ['talk','add','home','group','set'][i] === t));
+
+            if(t === 'home') {
+                const d = await callAPI('sync');
+                let html = `<div class="card"><h3>お知らせ</h3></div>`;
+                if(d.req?.length) html += d.req.map(r => `<div class="card">申請: ${r} <button onclick="hReq('${r}','accept')">承認</button></div>`).join('');
+                c.innerHTML = html || '<p style="text-align:center">通知はありません</p>';
+            } else if(t === 'talk') {
+                const d = await callAPI('sync');
+                c.innerHTML = (d.fr || []).map(f => `<div class="item" onclick="openChat('${f}', false)">👤 ${f}</div>`).join('') +
+                              (d.gr_list || []).map(g => `<div class="item" onclick="openChat('${g}', true)">👥 ${g}</div>`).join('') || '<p style="text-align:center; padding:20px;">トークがありません</p>';
+            } else if(t === 'add') {
+                c.innerHTML = `<div class="card"><h4>友達申請</h4><input id="s-id" placeholder="相手のID"><button class="login-btn" onclick="sReq()">申請を送る</button></div>`;
+            } else if(t === 'group') {
+                c.innerHTML = `<div class="card"><h4>新規グループ作成</h4><input id="gn" placeholder="グループ名"><button class="login-btn" onclick="mkG()">作成</button></div>`;
+            } else if(t === 'set') {
+                c.innerHTML = `<div class="card"><h4>設定</h4><p>ユーザーID: ${curId}</p><button class="login-btn" style="background:var(--danger)" onclick="location.reload()">ログアウト</button></div>`;
+            }
+        }
+
+        async function sReq() { 
+            const tId = document.getElementById('s-id').value; 
+            if(!tId) return;
+            await callAPI('send_req', { target: tId }); alert("申請しました"); tab('add'); 
+        }
+
+        async function hReq(tId, act) { await callAPI(act, { target: tId }); tab('home'); }
+
+        async function mkG() {
+            const gname = document.getElementById('gn').value.trim();
+            if(!gname) return alert("名前を入力してください");
+            await callAPI('make_group', { gname });
+            alert("グループを作成しました！"); tab('talk');
+        }
+
+        async function showInviteList() {
+            const d = await callAPI('sync');
+            const c = document.getElementById('view-content');
+            let html = `<div class="card"><h4>「${partner}」に招待</h4><p style="font-size:12px; color:#666;">友達を選択して招待してください</p>`;
+            html += (d.fr || []).map(f => `<div class="item" style="justify-content:space-between;">${f} <button class="invite-btn" onclick="execInvite('${f}')">招待</button></div>`).join('') || '<p>友達がいません</p>';
+            html += `<br><button class="login-btn" style="background:#ccc;" onclick="openChat('${partner}', true)">戻る</button></div>`;
+            c.innerHTML = html;
+        }
+
+        async function execInvite(tId) {
+            await callAPI('invite_group', { gname: partner, target: tId });
+            alert(tId + " を招待しました");
+        }
+
+        async function openChat(p, g) { 
+            partner = p; isGroup = g; 
+            document.getElementById('chat-bar').style.display = "flex"; 
+            loadMsgs(); 
+        }
+
+        async function loadMsgs() {
+            const msgs = await callAPI('get_msgs', { target: partner, isGroup });
+            const c = document.getElementById('view-content');
+            const atBottom = c.scrollHeight - c.scrollTop <= c.clientHeight + 100;
+            
+            let header = `<div class="chat-header"><span>${isGroup?'👥':'👤'} ${partner}</span>${isGroup?`<button class="invite-btn" onclick="showInviteList()">＋招待</button>`:''}</div>`;
+            
+            c.innerHTML = header + `<div style="display:flex; flex-direction:column; padding:10px;">` + 
+                msgs.map(m => `<div class="bubble ${m.s===curId?'me':'other'}"><b>${m.s}</b><br>${m.t}</div>`).join('') + `</div>`;
+            if(atBottom) c.scrollTop = c.scrollHeight;
+        }
+
+        async function send() {
+            const i = document.getElementById('m-in'); if(!i.value) return;
+            const msgVal = i.value;
+            i.value = "";
+            await callAPI('send_msg', { target: partner, msg: encodeURIComponent(msgVal), isGroup });
+            loadMsgs();
+        }
+    </script>
+</body>
+</html>
