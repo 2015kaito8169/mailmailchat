@@ -40,7 +40,8 @@
             <input type="text" id="mm-id" placeholder="ID">
             <input type="password" id="mm-pw" placeholder="パスワード">
             <button class="login-btn" onclick="handleAuth()">実行</button>
-            <p style="font-size:11px; color:#999; margin-top:15px; cursor:pointer;" onclick="isReg=!isReg; document.getElementById('mm-status').innerText=isReg?'新規登録':'ログイン'">新規登録/切替</p>
+　　　　　<p style="font-size:11px; color:#999; margin-top:15px;">登録時、実行ボタンを何度もクリックしないで下さい。実行には時間がかかります。もし何度もクリックすると、alertの連発が起き、最悪の場合、パソコンがクラッシュします</p>
+        <p style="font-size:11px; color:#999; margin-top:15px; cursor:pointer;" onclick="isReg=!isReg; document.getElementById('mm-status').innerText=isReg?'新規登録':'ログイン'">新規登録/切替</p>
         </div>
     </div>
 
